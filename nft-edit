@@ -1,0 +1,41 @@
+#!/bin/bash
+set -u
+set -o pipefail
+set +m
+shopt -s lastpipe
+
+DEFAULT=/etc/nftables.conf
+FILE=$DEFAULT
+
+if [[ ! -f "$FILE" ]]; then
+  >&2 echo "Invalid file: $FILE"
+  exit 1
+fi
+
+ORIGPERMS=$( stat --format %a "$FILE" )
+ORIGOWNER=$( stat --format %u:%g "$FILE" )
+
+TMPF=$( mktemp -p . -t .nftables-XXXXXXXXXX.nft )
+
+cp "$FILE" "$TMPF"
+chown $ORIGOWNER "$TMPF"
+chmod $ORIGPERMS "$TMPF"
+
+declare success=0
+
+while [ $success == 0 ]
+do
+  clear
+  $EDITOR "$TMPF" && nft -c -f "$TMPF" 
+
+  if [[ "$?" -ne 0 ]]; then
+    read -p "Press enter to try editing again OR Ctrl-C to abort"
+  else
+    success=1
+    echo cp "$TMPF" "$FILE"
+  fi
+done
+
+if [[ -f "$TMPF" ]]; then
+  rm "$TMPF"
+fi
